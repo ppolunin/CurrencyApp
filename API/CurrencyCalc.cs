@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CurrencyApp.API
@@ -10,6 +11,7 @@ namespace CurrencyApp.API
     {
         private static CBValutes valutes;
         private static readonly Stopwatch timer = new Stopwatch();
+        private static readonly SemaphoreSlim sem = new SemaphoreSlim(1);
         public static TimeSpan UpdateInterval { get; set; } = TimeSpan.FromHours(1);
 
         /// <summary>
@@ -17,13 +19,21 @@ namespace CurrencyApp.API
         /// </summary>
         private static async Task<CBValutes> TimedGetValutes()
         {
-            if (valutes == null || timer.Elapsed > UpdateInterval)
+            await sem.WaitAsync();
+            try
             {
-                timer.Restart();
-                return (valutes = await CBValutes.Get());
-            }
+                if (valutes == null || timer.Elapsed > UpdateInterval)
+                {
+                    timer.Restart();
+                    return (valutes = await CBValutes.Get());
+                }
 
-            return valutes;
+                return valutes;
+            } 
+            finally
+            {
+                sem.Release();
+            }
         }
 
         public static async Task<Money> Sum(string resultCurrency, Money[] money)
